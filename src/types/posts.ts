@@ -28,13 +28,13 @@ export const postSchema = z.object({
   id: z.number(),
   title: z.string(),
   content: z.string().nullable(),
-  file_url: z.string().nullable(),
   user_id: z.number(),
   mission_instance_id: z.number().nullable(),
   score: z.number().nullable(),
   created_at: z.string().nullable(),
   updated_at: z.string().nullable(),
   view_count: z.number(),
+  is_hidden: z.boolean(),
 });
 
 
@@ -43,9 +43,13 @@ export const createPostSchema = postSchema.omit({
   created_at: true,
   updated_at: true,
   view_count: true,
+  is_hidden: true,
 });
 
-export const updatePostSchema = createPostSchema.partial();
+export const updatePostSchema = createPostSchema.omit({
+  mission_instance_id: true,
+  score: true,
+});
 
 export const userWithOrganizationSchema = pickedUserSchema.extend({
   organizations: pickedOrganizationSchema.nullable(),

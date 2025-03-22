@@ -3,7 +3,6 @@ import { Suspense, useEffect, useState, useCallback, memo } from "react";
 import Text from "@/components/Text/Text";
 import Heading from "@/components/Text/Heading";
 import { useRouter } from "next/navigation";
-import { usePathname } from "next/navigation";
 import { getJourney } from "../../clientActions";
 import Spinner from "@/components/common/Spinner";
 import { useWeeks } from "@/hooks/useWeeks";
@@ -12,6 +11,9 @@ import WeekCard from "./WeekCard";
 import { AdminOnly } from "@/components/auth/AdminOnly";
 import { FloatingButton } from "@/components/common/FloatingButton";
 import { FaWandMagicSparkles } from "react-icons/fa6";
+import { useSearchParams } from "next/navigation";
+import { toaster } from "@/components/ui/toaster";
+import { useJourneyStore } from "@/store/journey";
 
 // WeekCard 컴포넌트를 메모이제이션
 const MemoizedWeekCard = memo(WeekCard);
@@ -51,12 +53,24 @@ const PlanContainer = styled.div`
   }
 `;
 
-export default function PlanTab() {
+export default function PlanTab({ slug }: { slug: string }) {
+  const searchParams = useSearchParams();
+  const status = searchParams.get("status");
   const router = useRouter();
-  const pathname = usePathname();
-  const slug = pathname.split("/").pop() ?? "";
   const [journeyId, setJourneyId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { setCurrentJourneyUuid, currentJourneyUuid, getCurrentJourneyId } = useJourneyStore();
+  
+  useEffect(() => {
+    if (status === "success") {
+      toaster.create({
+        title: "환영합니다! 클라스에 참여하셨습니다.",
+        type: "success",
+      });
+      setCurrentJourneyUuid(slug);
+      router.push(`/journey/${slug}`);
+    }
+  }, [status, router, slug, currentJourneyUuid]);
 
   // 여행 ID 가져오기
   useEffect(() => {
@@ -78,7 +92,11 @@ export default function PlanTab() {
     };
 
     fetchJourneyId();
-  }, [slug, router]);
+    setCurrentJourneyUuid(slug);
+    if (slug) {
+      getCurrentJourneyId();
+    }
+  }, [slug, router, setCurrentJourneyUuid, getCurrentJourneyId]);
 
   // useWeeks 훅 사용
   const {
@@ -100,8 +118,16 @@ export default function PlanTab() {
         name: `Week ${weeks.length + 1}`,
         week_number: weeks.length + 1,
       });
+      toaster.create({
+        title: "주차가 추가되었습니다.",
+        type: "success",
+      });
     } catch (error) {
       console.error("Error adding week:", error);
+      toaster.create({
+        title: "주차 추가 중 오류가 발생했습니다.",
+        type: "error",
+      });
     }
   }, [journeyId, weeks, createWeek]);
 

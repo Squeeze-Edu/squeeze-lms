@@ -22,7 +22,6 @@ export default async function JourneyPage({
   // params 전체를 await
   const resolvedParams = await params;
   const { slug } = resolvedParams;
-  
   const { error } = await getJourney(slug);
   if (error) {
     redirect("/");
@@ -31,16 +30,16 @@ export default async function JourneyPage({
     <div>
       <Tabs usePath={true} flexDirection="column">
         <Tab title="일정" icon={<FaSchool />} path="plan">
-          <PlanTab />
+          <PlanTab slug={slug}/>
         </Tab>
         <Tab title="미션" icon={<FaCalendarAlt />} path="missions">
-          <MissionTab/>
+          <MissionTab slug={slug}/>
         </Tab>
         <Tab title="순위" icon={<VscGraphLine />} path="dashboard">
           <DashboardTab/>
         </Tab>
         <Tab title="피드" icon={<TbMessages />} path="feed">
-          <FeedTab />
+          <FeedTab slug={slug}/>
         </Tab>
         <Tab title="설정" icon={<FiMenu />} path="settings">
           <SettingTab slug={slug} />
