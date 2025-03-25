@@ -6,7 +6,6 @@ import { FloatingButton } from "@/components/common/FloatingButton";
 import { useJourneyMissionInstances } from "@/hooks/useJourneyMissionInstances";
 import MissionCard from "@/app/journey/[slug]/_plan/MissionCard";
 import Spinner from "@/components/common/Spinner";
-import { JourneyMissionInstanceWithMission } from "@/types";
 import { useRouter, usePathname } from "next/navigation";
 import Text from "@/components/Text/Text";
 import { AdminOnly } from "@/components/auth/AdminOnly";
@@ -21,22 +20,52 @@ import { IconContainer } from "@/components/common/IconContainer";
 import { useCompletedMissions } from "@/hooks/usePosts";
 import Heading from "@/components/Text/Heading";
 import Footer from "@/components/common/Footer";
+
 export default function MissionTab({ slug }: { slug: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const { id: userId } = useAuth();
-  const { missionInstances, isLoading: isLoadingMissions } =
-    useJourneyMissionInstances();
-  const { completedMissionIds, isLoading: isLoadingCompletedMissions } =
-    useCompletedMissions(userId || 0);
+  const {
+    missionInstances,
+    isLoading: missionInstancesLoading,
+    error: missionInstancesError,
+  } = useJourneyMissionInstances(slug, 0);
+  const { completedMissionIds, isLoading: isLoadingCompletedMissions, refetch: refetchCompletedMissions } =
+    useCompletedMissions(userId || 0, slug);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMission, setSortMission] = useState<"asc" | "desc">("asc");
+  
+  // 디버깅용 useEffect
+  useEffect(() => {
+    console.log("MissionTab 컴포넌트 렌더링:", {
+      userId,
+      slug,
+      completedMissionIds: completedMissionIds,
+      missionInstancesCount: missionInstances?.length
+    });
+    
+    // 컴포넌트가 마운트 된 후 3초 후에 자동 refetch
+    const timer = setTimeout(() => {
+      refetchCompletedMissions();
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, [completedMissionIds, missionInstances, userId, slug, refetchCompletedMissions]);
+  
   // 현재 URL에서 slug 추출
   const getSlugFromPathname = () => {
-    // pathname 형식: /journey/[slug]/mission
-    const pathParts = pathname.split("/");
-    // journey 다음 부분이 slug
-    return pathParts.length > 2 ? pathParts[2] : "";
+    if (!pathname) return slug || "";
+    
+    try {
+      // pathname 형식: /journey/[slug]/mission
+      const pathParts = pathname.split("/");
+      // journey 다음 부분이 slug
+      return pathParts.length > 2 ? pathParts[2] : slug || "";
+    } catch (error) {
+      console.error("URL 파싱 오류:", error);
+      // 실패 시 props에서 받은 slug 사용
+      return slug || "";
+    }
   };
 
   // 미션 카드 클릭 핸들러
@@ -46,13 +75,18 @@ export default function MissionTab({ slug }: { slug: string }) {
   };
 
   // 로딩 중이면 스피너 표시
-  if (isLoadingMissions || isLoadingCompletedMissions) {
+  if (missionInstancesLoading || isLoadingCompletedMissions) {
     return <Spinner />;
   }
 
   // 완료하지 않은 미션만 필터링
   const pendingMissions = missionInstances.filter(
-    (instance) => !completedMissionIds.includes(instance.mission_id)
+    (instance) => {
+      // mission_instance_id로 직접 완료 여부 확인
+      const isCompleted = completedMissionIds.some(id => id === instance.id);
+      console.log(`미션 인스턴스 ID ${instance.id} 완료 여부:`, isCompleted);
+      return !isCompleted;
+    }
   );
 
   // 검색어로 미션 필터링

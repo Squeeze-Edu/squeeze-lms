@@ -3,7 +3,6 @@ import { Suspense, useEffect, useState, useCallback, memo } from "react";
 import Text from "@/components/Text/Text";
 import Heading from "@/components/Text/Heading";
 import { useRouter } from "next/navigation";
-import { getJourney } from "../../clientActions";
 import Spinner from "@/components/common/Spinner";
 import { useWeeks } from "@/hooks/useWeeks";
 import styled from "@emotion/styled";
@@ -13,120 +12,31 @@ import { FloatingButton } from "@/components/common/FloatingButton";
 import { FaWandMagicSparkles } from "react-icons/fa6";
 import { useSearchParams } from "next/navigation";
 import { toaster } from "@/components/ui/toaster";
-import { useJourneyStore } from "@/store/journey";
 import Footer from "@/components/common/Footer";
 import Button from "@/components/common/Button";
 import { Modal } from "@/components/modal/Modal";
-
-// WeekCard 컴포넌트를 메모이제이션
+import { useJourneyStore } from "@/store/journey";
 const MemoizedWeekCard = memo(WeekCard);
 
-// 최상위 컨테이너만 styled component로 정의
-const PlanContainer = styled.div`
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-  }
-
-  .add-button {
-    padding: 0.5rem 1rem;
-    background-color: var(--blue-500);
-    color: var(--white);
-    border-radius: 0.25rem;
-    border: none;
-    cursor: pointer;
-    transition: background-color 0.2s;
-
-    &:hover {
-      background-color: var(--blue-600);
-    }
-  }
-
-  .weeks-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .empty-state {
-    text-align: center;
-    padding: 2rem 0;
-  }
-`;
-
 export default function PlanTab({ slug }: { slug: string }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const status = searchParams.get("status");
-  const router = useRouter();
-  const [journeyId, setJourneyId] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { currentJourneyId } = useJourneyStore();
+
   const [weekName, setWeekName] = useState<string>("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // 안전하게 객체 가져오기 및 기본값 제공
-  const journeyStore = useJourneyStore();
-  const setCurrentJourneyUuid = journeyStore?.setCurrentJourneyUuid || (() => {});
-  const currentJourneyUuid = journeyStore?.currentJourneyUuid || '';
-  const getCurrentJourneyId = journeyStore?.getCurrentJourneyId || (() => Promise.resolve(null));
-  
+
   useEffect(() => {
     if (status === "success") {
       toaster.create({
         title: "환영합니다! 클라스에 참여하셨습니다.",
         type: "success",
       });
-      setCurrentJourneyUuid(slug);
       router.push(`/journey/${slug}`);
     }
-  }, [status, router, slug, setCurrentJourneyUuid]);
+  }, [status, router, slug]);
 
-  // 여행 ID 가져오기
-  useEffect(() => {
-    const fetchJourneyId = async () => {
-      if (!slug) {
-        setIsLoading(false);
-        return;
-      }
-      
-      try {
-        const result = await getJourney(slug);
-        const { data, error } = result || { data: null, error: null };
-        
-        if (error) {
-          console.error("Error fetching journey ID:", error);
-          router.push("/");
-          return;
-        }
-        
-        setJourneyId(data?.id || null);
-      } catch (error) {
-        console.error("Error:", error);
-        router.push("/");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchJourneyId();
-  }, [slug, router]);
-
-  // Journey UUID 설정을 위한 별도 useEffect
-  useEffect(() => {
-    if (!slug || !setCurrentJourneyUuid) return;
-    
-    // 이미 같은 UUID가 설정되어 있는지 확인
-    if (currentJourneyUuid === slug) return;
-    
-    try {
-      setCurrentJourneyUuid(slug);
-    } catch (error) {
-      console.error("Error setting current journey UUID:", error);
-    }
-  }, [slug, currentJourneyUuid, setCurrentJourneyUuid]);
-
-  // useWeeks 훅 사용 - 안전한 값 제공
   const {
     weeks = [],
     isLoading: weeksLoading = false,
@@ -134,15 +44,15 @@ export default function PlanTab({ slug }: { slug: string }) {
     createWeek,
     updateWeek,
     deleteWeek,
-  } = useWeeks(journeyId || 0) || {};
+  } = useWeeks(currentJourneyId || 0) || {};
 
   // 새 주차 추가 핸들러 예시
   const handleAddWeek = useCallback(async () => {
-    if (!journeyId || !createWeek || !weekName) return;
+    if (!currentJourneyId || !createWeek || !weekName) return;
     
     try {
       await createWeek({
-        journey_id: journeyId,
+        journey_id: currentJourneyId,
         name: weekName || `Week ${weeks.length + 1}`,
         week_number: weeks.length + 1,
       });
@@ -159,14 +69,14 @@ export default function PlanTab({ slug }: { slug: string }) {
         type: "error",
       });
     }
-  }, [journeyId, weeks, createWeek, weekName]);
+  }, [currentJourneyId, weeks, createWeek, weekName]);
 
   const openModal = useCallback(() => {
     setWeekName(`Week ${weeks.length + 1}`);
     setIsModalOpen(true);
   }, [weeks]);
 
-  if (isLoading) {
+  if (weeksLoading) {
     return (
       <div>
         <Spinner />
@@ -182,7 +92,6 @@ export default function PlanTab({ slug }: { slug: string }) {
       </div>
     );
   }
-
   return (
     <PlanContainer>
       <div className="header">
@@ -200,10 +109,10 @@ export default function PlanTab({ slug }: { slug: string }) {
                 <MemoizedWeekCard
                   key={week.id}
                   week={week}
-                  updateWeek={updateWeek || (() => {})}
-                  deleteWeek={deleteWeek || (() => {})}
+                  deleteWeek={deleteWeek}
                   index={index}
-                  journeyId={journeyId || 0}
+                  journeyId={currentJourneyId || 0}
+                  journeyUuid={slug}
                 />
               ))}
           </div>
@@ -256,3 +165,37 @@ export default function PlanTab({ slug }: { slug: string }) {
     </PlanContainer>
   );
 }
+
+const PlanContainer = styled.div`
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .add-button {
+    padding: 0.5rem 1rem;
+    background-color: var(--blue-500);
+    color: var(--white);
+    border-radius: 0.25rem;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s;
+
+    &:hover {
+      background-color: var(--blue-600);
+    }
+  }
+
+  .weeks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 2rem 0;
+  }
+`;

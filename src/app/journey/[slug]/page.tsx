@@ -1,16 +1,8 @@
 import { getJourney } from "@/app/journey/actions";
-import { Tabs, Tab } from "@/components/tab/Tabs";
-import { FaSchool, FaCalendarAlt } from "react-icons/fa";
-import { VscGraphLine } from "react-icons/vsc";
-import { TbMessages } from "react-icons/tb";
-import { FiMenu } from "react-icons/fi";
-import PlanTab from "./_plan/PlanTab";
-import MissionTab from "./_mission/MissionTab";
-import FeedTab from "./_feed/FeedTab";
-import DashboardTab from "./_dashboard/DashboardTab";
-import SettingTab from "./_setting/SettingTab";
 import { toaster } from "@/components/ui/toaster";
 import { redirect } from "next/navigation";
+import JourneyClient from "./client";
+
 // params 타입을 Promise로 정의
 type Params = Promise<{ slug: string }>;
 
@@ -20,44 +12,38 @@ export default async function JourneyPage({
   params: Params;
 }) {
   try {
+    // 디버깅 정보 기록
+    
     // params 전체를 await
     const resolvedParams = await params;
     const { slug } = resolvedParams;
     
-    const journeyResult = await getJourney(slug);
+    
+    // 서버 사이드에서 먼저 확인
+    let journeyResult;
+    try {
+      journeyResult = await getJourney(slug);
+    } catch (fetchError) {
+      console.error("[JourneyPage] getJourney 에러:", fetchError);
+      journeyResult = { error: fetchError };
+    }
+    
     const { error } = journeyResult || { error: null };
     
     if (error) {
+      console.error("[JourneyPage] 에러 발생:", error);
       toaster.create({
         title: "여정을 찾을 수 없습니다",
         type: "error",
       });
       redirect("/");
     }
+      
+    // 클라이언트 컴포넌트에 slug만 전달
+    return <JourneyClient slug={slug} />;
     
-    return (
-      <div>
-        <Tabs usePath={true} flexDirection="column">
-          <Tab title="일정" icon={<FaSchool />} path="plan">
-            <PlanTab slug={slug}/>
-          </Tab>
-          <Tab title="미션" icon={<FaCalendarAlt />} path="missions">
-            <MissionTab slug={slug}/>
-          </Tab>
-          <Tab title="순위" icon={<VscGraphLine />} path="dashboard">
-            <DashboardTab slug={slug}/>
-          </Tab>
-          <Tab title="피드" icon={<TbMessages />} path="feed">
-            <FeedTab slug={slug}/>
-          </Tab>
-          <Tab title="설정" icon={<FiMenu />} path="settings">
-            <SettingTab slug={slug} />
-          </Tab>
-        </Tabs>
-      </div>
-    );
   } catch (error) {
-    console.error("Journey page error:", error);
+    console.error("[JourneyPage] 전체 오류:", error);
     toaster.create({
       title: "오류가 발생했습니다",
       type: "error",

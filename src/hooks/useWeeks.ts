@@ -11,17 +11,37 @@ import { useCallback } from "react";
 
 // 데이터 가져오기 함수
 const fetcher = async (journeyId: number) => {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("journey_weeks")
-    .select("*")
-    .eq("journey_id", journeyId);
-
-  if (error) {
-    throw new Error(error.message);
+  if (!journeyId || journeyId <= 0) {
+    console.warn("유효하지 않은 journeyId로 호출됨:", journeyId);
+    return [];
   }
 
-  return data as JourneyWeek[];
+  try {
+    const supabase = createClient();
+    
+    // Supabase 요청 자체에 try-catch 추가
+    try {
+      const { data, error } = await supabase
+        .from("journey_weeks")
+        .select("*")
+        .eq("journey_id", journeyId);
+
+      if (error) {
+        console.error("useWeeks: 주차 데이터 요청 에러:", error);
+        throw new Error(error.message);
+      }
+
+      const safeData = data || [];
+      return safeData as JourneyWeek[];
+    } catch (dbError) {
+      console.error("useWeeks: Supabase 쿼리 에러:", dbError);
+      return [];
+    }
+  } catch (err) {
+    console.error("useWeeks: 예외 발생:", err);
+    // 중요: 여기서 빈 배열을 반환하여 훅이 크래시되지 않도록 함
+    return [];
+  }
 };
 
 // 미션 데이터 가져오기 함수
@@ -48,17 +68,38 @@ const fetchMissionsByWeekId = async (weekId: number) => {
 };
 
 export function useWeeks(journeyId: number) {
+  // 유효한 journeyId 검증
+  const validJourneyId = journeyId && journeyId > 0 ? journeyId : 0;
+  
+  // 훅의 키를 체크하는 로그 추가
+  const swrKey = validJourneyId ? `journey-weeks-${validJourneyId}` : null;
+  
   const {
     data: weeks,
     error,
     isLoading,
     mutate,
   } = useSWR<JourneyWeek[]>(
-    journeyId ? `journey-weeks-${journeyId}` : null,
-    () => fetcher(journeyId),
+    swrKey,
+    () => fetcher(validJourneyId),
     {
       revalidateOnFocus: false,
       dedupingInterval: 60000, // 1분 동안 중복 요청 방지
+      errorRetryCount: 3, // 최대 3번 재시도
+      onErrorRetry: (error, key, config, revalidate, { retryCount }) => {
+        // 메시지 로깅
+        
+        // 네트워크 에러일 경우만 재시도
+        if (error.name === 'SyntaxError') return;
+        
+        // 최대 횟수를 초과한 경우 재시도 안함
+        if (retryCount >= 3) return;
+        
+        // 지수 백오프로 재시도
+        setTimeout(() => revalidate({ retryCount }), 
+          Math.min(1000 * 2 ** retryCount, 30000));
+      },
+      fallbackData: [], // 데이터가 로드되기 전에 빈 배열을 제공
     }
   );
 
@@ -87,6 +128,7 @@ export function useWeeks(journeyId: number) {
   // 주차 업데이트 함수
   const updateWeek = useCallback(
     async (id: number, weekData: UpdateJourneyWeek) => {
+      console.log("updateWeek", id, weekData);
       const supabase = createClient();
       const { data, error } = await supabase
         .from("journey_weeks")

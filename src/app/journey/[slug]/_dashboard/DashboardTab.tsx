@@ -11,7 +11,6 @@ import { useAuth } from "@/components/AuthProvider";
 import { Box } from "@chakra-ui/react";
 import { z } from "zod";
 import { useJourneyStore } from "@/store/journey";
-import { getUserPointsByJourneyId } from "@/app/journey/actions";
 import { useJourneyMissionInstances } from "@/hooks/useJourneyMissionInstances";
 import { useWeeks } from "@/hooks/useWeeks";
 import Heading from "@/components/Text/Heading";
@@ -29,16 +28,8 @@ const leaderboardUserSchema = z.object({
   isCurrentUser: z.boolean(),
 });
 
-const submissionStatsSchema = z.object({
-  totalPosts: z.number(),
-  completedPosts: z.number(),
-  pendingPosts: z.number(),
-  completionRate: z.number(),
-});
-
 // 타입 정의
 type LeaderboardUser = z.infer<typeof leaderboardUserSchema>;
-type SubmissionStats = z.infer<typeof submissionStatsSchema>;
 
 interface WeekProgress {
   id: number;
@@ -51,55 +42,36 @@ interface WeekProgress {
 
 export default function DashboardTab({ slug }: { slug?: string }) {
   const { id: userId } = useAuth();
-  
-  // 안전한 journeyStore 접근
-  const journeyStore = useJourneyStore();
-  const currentJourneyId = journeyStore?.currentJourneyId;
-  const currentJourneyUuid = journeyStore?.currentJourneyUuid;
-  const setCurrentJourneyUuid = journeyStore?.setCurrentJourneyUuid;
-  const getCurrentJourneyId = journeyStore?.getCurrentJourneyId;
-  
-  // slug가 제공되면 UUID 설정
-  useEffect(() => {
-    if (!slug || !setCurrentJourneyUuid) return;
-    
-    console.log("Setting journey UUID:", slug);
-    setCurrentJourneyUuid(slug);
-  }, [slug, setCurrentJourneyUuid]);
-
-  // UUID가 설정되면 ID 가져오기
-  useEffect(() => {
-    if (!getCurrentJourneyId || !currentJourneyUuid) return;
-    
-    console.log("Fetching journey ID for UUID:", currentJourneyUuid);
-    getCurrentJourneyId().catch(error => {
-      console.error("Error getting journey ID:", error);
-    });
-  }, [currentJourneyUuid, getCurrentJourneyId]);
-  
+  const { currentJourneyId } = useJourneyStore();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>([]);
+  const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>(
+    []
+  );
   const [weekProgress, setWeekProgress] = useState<WeekProgress[]>([]);
   const [totalCompletionRate, setTotalCompletionRate] = useState(0);
 
   // 주차 데이터 가져오기 - 안전하게 기본값 제공
-  const { weeks = [], isLoading: weeksLoading = false } = useWeeks(currentJourneyId || 0) || {};
+  const { weeks = [], isLoading: weeksLoading = false } =
+    useWeeks(currentJourneyId || 0) || {};
 
-  // 전체 미션 인스턴스 가져오기 - 안전하게 기본값 제공
-  const { missionInstances = [], isLoading: missionsLoading = false } = 
-    useJourneyMissionInstances(currentJourneyId || 0) || {};
+  // 전체 미션 인스턴스 가져오기 - slug 직접 전달하도록 개선
+  const { missionInstances = [], isLoading: missionsLoading = false } =
+    useJourneyMissionInstances(slug || "", currentJourneyId || 0) || {};
 
   useEffect(() => {
-    console.log("DashboardTab useEffect 실행 - 데이터 확인:", { 
-      userId, 
-      currentJourneyId, 
-      weeks: weeks?.length, 
-      missionInstances: missionInstances?.length 
+    console.log("DashboardTab useEffect 실행 - 데이터 확인:", {
+      userId,
+      currentJourneyId,
+      weeks: weeks?.length,
+      missionInstances: missionInstances?.length,
     });
-    
+
     if (!userId || !currentJourneyId) {
-      console.log("userId 또는 currentJourneyId가 없음:", { userId, currentJourneyId });
+      console.log("userId 또는 currentJourneyId가 없음:", {
+        userId,
+        currentJourneyId,
+      });
       setIsLoading(false);
       return;
     }
@@ -114,141 +86,162 @@ export default function DashboardTab({ slug }: { slug?: string }) {
 
         // 1. 점수 데이터 가져오기 - POST 방식으로 변경
         console.log("포인트 데이터 가져오기 시작 - currentJourneyId:", currentJourneyId);
-        
-        // POST 메서드로 API 호출
-        const response = await fetch('/api/user-points', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ journeyId: currentJourneyId }),
-        });
-        
-        console.log("API 응답 상태:", response.status);
-        
-        if (!response.ok) {
-          throw new Error(`API 응답 오류: ${response.status}`);
-        }
-        
-        const pointsData = await response.json();
-        console.log("받은 포인트 데이터:", { count: pointsData?.length || 0 });
-        
-        if (!pointsData) {
-          throw new Error("포인트 데이터를 가져올 수 없습니다");
-        }
-        
-        // 2. 사용자별 점수 계산 및 리더보드 생성
-        // 모든 사용자 프로필 가져오기
-        const { data: profiles, error: profilesError } = await supabase.from(
-          "profiles"
-        ).select(`
-            id, 
-            first_name, 
-            last_name, 
-            profile_image,
-            organizations (
-              id,
-              name
-            )
-          `);
 
-        if (profilesError)
-          throw new Error("프로필 데이터를 가져오는 중 오류 발생");
-
-        // 사용자별 점수 계산
-        const userScores: Record<number, number> = {};
-
-        if (pointsData) {
-          pointsData.forEach((point: any) => {
-            const userId = point.profile_id;
-            const score = point.total_points || 0;
-
-            if (!userScores[userId]) {
-              userScores[userId] = 0;
-            }
-            userScores[userId] += score;
+        try {
+          // POST 메서드로 API 호출
+          const response = await fetch("/api/user-points", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ journeyId: currentJourneyId }),
           });
-        }
 
-        // 리더보드 데이터 구성
-        const leaderboard = Object.keys(userScores).map((userIdStr) => {
-          const profileId = Number(userIdStr);
-          const profile = profiles?.find((p) => p.id === profileId);
+          console.log("API 응답 상태:", response.status);
 
-          return {
-            id: profileId,
-            first_name: profile?.first_name || null,
-            last_name: profile?.last_name || null,
-            profile_image: profile?.profile_image || null,
-            organization_name: profile?.organizations?.name || null,
-            total_score: userScores[profileId] || 0,
-            rank: 0, // 초기값, 아래에서 계산
-            isCurrentUser: profileId === userId,
-          };
-        });
+          // 실패 응답 처리 개선
+          if (!response.ok) {
+            const errorText = await response.text();
+            let errorMessage = `API 응답 오류: ${response.status}`;
+            
+            try {
+              // JSON 형식인지 확인
+              const errorJson = JSON.parse(errorText);
+              errorMessage += ` - ${errorJson.error || '알 수 없는 오류'}`;
+            } catch {
+              // JSON이 아니면 그냥 텍스트 사용
+              if (errorText) {
+                errorMessage += ` - ${errorText.substring(0, 100)}`;
+              }
+            }
+            
+            throw new Error(errorMessage);
+          }
 
+          const pointsData = await response.json();
+          console.log("받은 포인트 데이터:", { count: pointsData?.length || 0 });
 
-        // 점수별 내림차순 정렬 및 순위 할당
-        leaderboard.sort((a, b) => b.total_score - a.total_score);
-        leaderboard.forEach((user, index) => {
-          user.rank = index + 1;
-        });
+          if (!pointsData) {
+            throw new Error("포인트 데이터를 가져올 수 없습니다");
+          }
 
-        setLeaderboardUsers(leaderboard);
+          // 2. 사용자별 점수 계산 및 리더보드 생성
+          // 모든 사용자 프로필 가져오기
+          const { data: profiles, error: profilesError } = await supabase.from(
+            "profiles"
+          ).select(`
+              id, 
+              first_name, 
+              last_name, 
+              profile_image,
+              organizations (
+                id,
+                name
+              )
+            `);
 
-        // 3. 주차별 진행 상황 계산
-        if (weeks && missionInstances && pointsData) {
-          const weekProgressData: WeekProgress[] = weeks.map((week) => {
-            // 해당 주차의 미션 인스턴스 찾기
-            const weekMissions = missionInstances.filter(
-              (instance) => instance.journey_week_id === week.id
-            );
+          if (profilesError)
+            throw new Error("프로필 데이터를 가져오는 중 오류 발생");
 
-            // 완료된 미션 수 계산 (user_points 기준)
-            const weekMissionsIds = weekMissions.map((mission) => mission.id);
-            const completedMissions = pointsData.filter((point: any) => {
-              return (
-                point.profile_id === userId &&
-                point.mission_instance_id &&
-                weekMissionsIds.includes(point.mission_instance_id)
-              );
-            }).length;
+          // 사용자별 점수 계산
+          const userScores: Record<number, number> = {};
 
-            const totalMissions = weekMissions.length;
-            const completionRate =
-              totalMissions > 0
-                ? Math.round((completedMissions / totalMissions) * 100)
-                : 0;
+          if (pointsData) {
+            pointsData.forEach((point: any) => {
+              const userId = point.profile_id;
+              const score = point.total_points || 0;
+
+              if (!userScores[userId]) {
+                userScores[userId] = 0;
+              }
+              userScores[userId] += score;
+            });
+          }
+
+          // 리더보드 데이터 구성
+          const leaderboard = Object.keys(userScores).map((userIdStr) => {
+            const profileId = Number(userIdStr);
+            const profile = profiles?.find((p) => p.id === profileId);
 
             return {
-              id: week.id,
-              name: week.name || `Week ${week.week_number}`,
-              weekNumber: week.week_number || 0,
-              totalMissions,
-              completedMissions,
-              completionRate,
+              id: profileId,
+              first_name: profile?.first_name || null,
+              last_name: profile?.last_name || null,
+              profile_image: profile?.profile_image || null,
+              organization_name: profile?.organizations?.name || null,
+              total_score: userScores[profileId] || 0,
+              rank: 0, // 초기값, 아래에서 계산
+              isCurrentUser: profileId === userId,
             };
           });
 
-          // 주차 번호 기준 정렬
-          weekProgressData.sort((a, b) => a.weekNumber - b.weekNumber);
-          setWeekProgress(weekProgressData);
+          // 점수별 내림차순 정렬 및 순위 할당
+          leaderboard.sort((a, b) => b.total_score - a.total_score);
+          leaderboard.forEach((user, index) => {
+            user.rank = index + 1;
+          });
 
-          // 전체 완료율 계산
-          const totalMissions = weekProgressData.reduce(
-            (sum, week) => sum + week.totalMissions,
-            0
-          );
-          const totalCompleted = weekProgressData.reduce(
-            (sum, week) => sum + week.completedMissions,
-            0
-          );
-          const overallRate =
-            totalMissions > 0
-              ? Math.round((totalCompleted / totalMissions) * 100)
-              : 0;
+          setLeaderboardUsers(leaderboard);
 
-          setTotalCompletionRate(overallRate);
+          // 3. 주차별 진행 상황 계산
+          if (weeks && missionInstances && pointsData) {
+            const weekProgressData: WeekProgress[] = weeks.map((week) => {
+              // 해당 주차의 미션 인스턴스 찾기
+              const weekMissions = missionInstances.filter(
+                (instance) => instance.journey_week_id === week.id
+              );
+
+              // 완료된 미션 수 계산 (user_points 기준)
+              const weekMissionsIds = weekMissions.map((mission) => mission.id);
+              const completedMissions = pointsData.filter((point: any) => {
+                return (
+                  point.profile_id === userId &&
+                  point.mission_instance_id &&
+                  weekMissionsIds.includes(point.mission_instance_id)
+                );
+              }).length;
+
+              const totalMissions = weekMissions.length;
+              const completionRate =
+                totalMissions > 0
+                  ? Math.round((completedMissions / totalMissions) * 100)
+                  : 0;
+
+              return {
+                id: week.id,
+                name: week.name || `Week ${week.week_number}`,
+                weekNumber: week.week_number || 0,
+                totalMissions,
+                completedMissions,
+                completionRate,
+              };
+            });
+
+            // 주차 번호 기준 정렬
+            weekProgressData.sort((a, b) => a.weekNumber - b.weekNumber);
+            setWeekProgress(weekProgressData);
+
+            // 전체 완료율 계산
+            const totalMissions = weekProgressData.reduce(
+              (sum, week) => sum + week.totalMissions,
+              0
+            );
+            const totalCompleted = weekProgressData.reduce(
+              (sum, week) => sum + week.completedMissions,
+              0
+            );
+            const overallRate =
+              totalMissions > 0
+                ? Math.round((totalCompleted / totalMissions) * 100)
+                : 0;
+
+            setTotalCompletionRate(overallRate);
+          }
+        } catch (err) {
+          console.error("대시보드 데이터를 가져오는 중 오류 발생:", err);
+          setError(
+            err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다."
+          );
         }
       } catch (err) {
         console.error("대시보드 데이터를 가져오는 중 오류 발생:", err);
@@ -267,7 +260,14 @@ export default function DashboardTab({ slug }: { slug?: string }) {
       // 데이터가 없지만 로딩이 끝난 경우에는 로딩 상태를 false로 설정
       setIsLoading(false);
     }
-  }, [currentJourneyId, userId, weeks, missionInstances, weeksLoading, missionsLoading]);
+  }, [
+    currentJourneyId,
+    userId,
+    weeks,
+    missionInstances,
+    weeksLoading,
+    missionsLoading,
+  ]);
 
   // 모든 데이터가 로드될 때까지 스피너 표시
   if (isLoading || weeksLoading || missionsLoading) {
@@ -298,9 +298,9 @@ export default function DashboardTab({ slug }: { slug?: string }) {
     <DashboardTabContainer>
       {/* 전체 미션 진행 상황 */}
       <SectionContainer>
-        <Text variant="body" fontWeight="bold" className="section-title">
-          전체 미션 진행 상황
-        </Text>
+        <Heading level={3} className="section-title">
+          나의 진행 상황
+        </Heading>
 
         <StatsContainer>
           <CircularProgressWrapper>

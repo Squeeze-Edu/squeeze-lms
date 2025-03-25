@@ -22,14 +22,18 @@ export default function JourneyCard({ journey }: { journey: Journey }) {
   );
   const { removeJourney } = useJourney();
 
-  const handleClick = () => {
-    if (isUserJoined) {
-      router.push(`/journey/${journey.uuid}`);
-    } else if (role === "admin") {
-      router.push(`/journey/${journey.uuid}`);
+  const handleClick = async () => {
+    if (isUserJoined || role === "admin") {
+      try {
+        router.push(`/journey/${journey.uuid}`);
+      } catch (error) {
+        console.error("JourneyCard 클릭 처리 중 오류:", error);
+        router.push(`/journey/${journey.uuid}`);
+      }
     } else {
       toaster.create({
-        title: "초대되지 않은 클라스 입니다. 담당 선생님에게 초대를 요구해주세요.",
+        title:
+          "초대되지 않은 클라스 입니다. 담당 선생님에게 초대를 요구해주세요.",
         type: "warning",
         duration: 1400,
       });
