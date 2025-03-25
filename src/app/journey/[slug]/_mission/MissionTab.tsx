@@ -20,6 +20,7 @@ import { FaSortAmountDownAlt, FaSortAmountUpAlt } from "react-icons/fa";
 import { IconContainer } from "@/components/common/IconContainer";
 import { useCompletedMissions } from "@/hooks/usePosts";
 import Heading from "@/components/Text/Heading";
+import Footer from "@/components/common/Footer";
 export default function MissionTab({ slug }: { slug: string }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -145,7 +146,7 @@ export default function MissionTab({ slug }: { slug: string }) {
       <AdminOnly>
         <FloatingButton
           onClick={() =>
-            router.push(`/journey/${getSlugFromPathname()}/new-mission`)
+            router.push(`/journey/${getSlugFromPathname()}/teacher/new-mission`)
           }
         >
           <FaWandMagicSparkles />
@@ -154,6 +155,7 @@ export default function MissionTab({ slug }: { slug: string }) {
           </Text>
         </FloatingButton>
       </AdminOnly>
+      <Footer />
     </MissionTabContainer>
   );
 }

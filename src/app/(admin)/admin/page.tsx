@@ -3,7 +3,6 @@
 import { useAuthStore } from "@/store/auth";
 import { toaster } from "@/components/ui/toaster";
 import Button from "@/components/common/Button";
-import { Table } from "@chakra-ui/react";
 import Select from "react-select";
 import { useOrganization } from "@/hooks/useOrganization";
 export default function AdminPage() {
@@ -45,4 +44,4 @@ export default function AdminPage() {
   );
 }
 
-//TODO: 1. 어드민패널 페이지 만들기
+//TODO: 2. 어드민패널 페이지 만들기

@@ -4,6 +4,7 @@ import { getUser, getUserProfile, logout } from "@/app/(auth)/actions";
 import { encrypt, decrypt } from "@/utils/encryption";
 import { redirect } from "next/navigation";
 import { toaster } from "@/components/ui/toaster";
+import Cookies from "js-cookie";
 
 // 역할 타입 정의
 export type Role = "user" | "teacher" | "admin";
@@ -151,9 +152,10 @@ export const useAuthStore = create<UserState>()(
           console.error("refreshUser 오류:", error);
           set({
             loading: false,
-            error: error instanceof Error
-              ? error.message
-              : "사용자 정보 갱신 중 오류가 발생했습니다",
+            error:
+              error instanceof Error
+                ? error.message
+                : "사용자 정보 갱신 중 오류가 발생했습니다",
           });
         }
       },
@@ -211,6 +213,7 @@ export const useAuthStore = create<UserState>()(
         removeItem: encryptedStorage.removeItem,
       },
       partialize: (state) => ({
+        id: state.id,
         uid: state.uid,
         email: state.email,
         role: state.role,

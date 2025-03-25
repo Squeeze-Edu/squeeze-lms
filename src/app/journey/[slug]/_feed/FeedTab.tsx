@@ -16,12 +16,13 @@ import Heading from "@/components/Text/Heading";
 
 export default function FeedTab({ slug }: { slug: string }) {
   const { data: posts, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = usePosts(10, slug);
-  //TODO: 1. 포스트 현재 클라스에서만 보이게 하기
   const { id: userId } = useAuth();
   const { completedMissionIds, isLoading: isLoadingCompletedMissions } =
     useCompletedMissions(userId || 0);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortPosts, setSortPosts] = useState<"asc" | "desc">("desc");
+
+  //TODO: 1. 게시물 필터
   
   // 무한 스크롤을 위한 observer ref
   const observerRef = useRef<IntersectionObserver | null>(null);
