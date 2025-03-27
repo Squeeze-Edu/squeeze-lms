@@ -9,7 +9,7 @@ import Text from "@/components/Text/Text";
 import Spinner from "@/components/common/Spinner";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { useParams } from "next/navigation";
-import { journey } from "@/utils/journey/journey";
+import { journey } from "@/utils/data/journey";
 
 // 도넛 차트 컴포넌트 (메모이제이션)
 const DonutChart = memo(({ weekStat }: { weekStat: WeeklyStat }) => {
@@ -120,13 +120,10 @@ export default function WeeklySubmissionChart() {
     
     const initJourney = async () => {
       try {
-        console.log("[WeeklySubmissionChart] 초기화 시작:", { slug });
         const journeyData = await journey.getJourneyByUuidRetrieveId(slug as string);
-        console.log("[WeeklySubmissionChart] 여정 데이터:", journeyData);
         
         if (journeyData && journeyData.length > 0) {
           const id = journeyData[0].id;
-          console.log("[WeeklySubmissionChart] 여정 ID:", id);
           setCurrentJourneyId(id);
           setLocalJourneyId(id);
         } else {
@@ -261,7 +258,7 @@ const ChartContainer = styled.div`
 
 const PercentageDisplay = styled.div<{ submissionRate: number }>`
   position: absolute;
-  top: 50%;
+  top: 45%;
   left: 50%;
   transform: translate(-50%, -50%);
   display: flex;
