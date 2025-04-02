@@ -13,12 +13,12 @@ export const journeyMissionInstanceSchema = z.object({
   id: z.number(),
   journey_week_id: z.number(),
   mission_id: z.number(),
-  status: missionStatusEnum.default('not_started'),
-  release_date: z.string().nullable(),
-  expiry_date: z.string().nullable(),
-  created_at: z.string().nullable(),
-  updated_at: z.string().nullable(),
-  journey_uuid: z.string().nullable(),
+  status: z.any(),
+  release_date: z.string(),
+  expiry_date: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  journey_uuid: z.string(),
 });
 
 export const createJourneyMissionInstanceSchema = journeyMissionInstanceSchema.omit({
@@ -28,10 +28,11 @@ export const createJourneyMissionInstanceSchema = journeyMissionInstanceSchema.o
 });
 
 export const journeyMissionInstanceSchemaWithMission = journeyMissionInstanceSchema.extend({
-  missions: missionSchema,
+  mission: missionSchema,
 });
 
 export const updateJourneyMissionInstanceSchema = createJourneyMissionInstanceSchema.partial();
+
 
 export type MissionStatus = z.infer<typeof missionStatusEnum>;
 export type JourneyMissionInstance = z.infer<typeof journeyMissionInstanceSchema>;

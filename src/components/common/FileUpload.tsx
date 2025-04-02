@@ -50,7 +50,7 @@ export default function FileUpload({
 
   useEffect(() => {
     checkExistingUpload(uid);
-  }, []);
+  }, [uid]);
 
   const booledIsAuthenticated = Boolean(isAuthenticated);
 
@@ -204,8 +204,6 @@ export default function FileUpload({
       });
 
       const { data, error } = await uploadFile(renamedFile);
-
-      console.log("업로드 data", data);
 
       if (error) {
         if (

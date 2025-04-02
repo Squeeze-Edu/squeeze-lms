@@ -19,7 +19,7 @@ export function useJourneyMissionInstances(
   const journeyUuid = specificJourneyUuid;
   
   // 데이터 가져오기 함수
-  const fetcher = useCallback(async (key: string) => {
+  const fetcher = useCallback(async () => {
     // 키에서 데이터 추출 (SWR 키는 `mission-instances-${weekId}-${journeyUuid}` 형식)
     
     if (!journeyUuid) {
@@ -123,7 +123,7 @@ export function useJourneyMissionInstances(
       const supabase = createClient();
       const { data, error } = await supabase
         .from("journey_mission_instances")
-        .insert(instanceData)
+        .insert(instanceData as any)
         .select(
           `
         *,
@@ -155,7 +155,7 @@ export function useJourneyMissionInstances(
       const supabase = createClient();
       const { data, error } = await supabase
         .from("journey_mission_instances")
-        .update(instanceData)
+        .update(instanceData as any)
         .eq("id", id)
         .select(
           `
