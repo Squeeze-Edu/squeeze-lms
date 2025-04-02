@@ -7,45 +7,37 @@ import { Input } from "@chakra-ui/react";
 import Button from "@/components/common/Button";
 import Text from "@/components/Text/Text";
 import Checkbox from "@/components/common/Checkbox";
-import { Separator, Stack, Spinner } from "@chakra-ui/react";
+import {
+  Separator,
+  Stack,
+  Spinner,
+  RadioGroup,
+  HStack,
+} from "@chakra-ui/react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { createUserSchema, Role, type CreateUser } from "@/types";
 import { DevTool } from "@hookform/devtools";
 import { useState, useEffect } from "react";
-import Cookies from "js-cookie";
-import { decrypt } from "@/utils/encryption";
-import { NeededUserMetadata } from "@/app/(auth)/auth/callback/route";
-import { createProfile } from "../../actions";
 import { useOrganization } from "@/hooks/useOrganization";
 import Select from "react-select";
-import { Modal } from "@/components/modal/Modal";
-import { confirmRoleAccessCode, getUser } from "../../actions";
 import { toaster } from "@/components/ui/toaster";
-import { useAuth } from "@/components/AuthProvider";
 import constants from "@/utils/constants";
+import { user } from "@/utils/data/user";
+import { signupPageSchema, type SignupPage } from "@/types";
+import { auth } from "@/utils/data/auth";
+import { Modal } from "@/components/modal/Modal";
+import { Role } from "@/types";
+import { confirmRoleAccessCode } from "../actions";
 
 type Agreement = "mailAgreement" | "cookieAgreement";
 
-export const formatedKrRole = (role: Role) => {
-  if (role === "admin") return "관리자";
-  if (role === "teacher") return "교사";
-  if (role === "user") return "학생";
-};
-
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
   const [isChecked, setIsChecked] = useState<Agreement[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [roleAccessCode, setRoleAccessCode] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [authData, setAuthData] = useState<NeededUserMetadata | null>(null);
-  const [isSignUpUseEmail, setIsSignUpUseEmail] = useState(false);
-  const [roleAccessType, setRoleAccessType] = useState<{
-    label: string;
-    value: Omit<Role, "user">;
-  }>({ label: "교사", value: "teacher" });
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [roleAccessType, setRoleAccessType] = useState<string>("teacher");
   const [confirmedRoleType, setConfirmedRoleType] = useState<Role | null>(null);
   const roleAccessTypeOptions = [
     { label: "관리자", value: "admin" },
@@ -56,109 +48,51 @@ export default function LoginPage() {
   } = useOrganization();
   const { organizations, isLoading: isOrganizationLoading } =
     useOrganizationList();
-  const { refreshUser } = useAuth();
 
   const {
     register,
     handleSubmit,
     control,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
-  } = useForm<CreateUser>({
-    resolver: zodResolver(createUserSchema),
-    mode: "onChange",
+  } = useForm<SignupPage>({
+    resolver: zodResolver(signupPageSchema),
+    mode: "onBlur",
     defaultValues: {
       email: "",
       first_name: "",
       last_name: "",
       phone: "",
       role: "user",
-      uid: "",
-      profile_image: "",
       marketing_opt_in: false,
       privacy_agreed: false,
+      profile_image: "",
+      uid: "",
     },
   });
 
-  // 사용자 데이터 로드
-  useEffect(() => {
-    let isMounted = true;
+  // 필수 필드 감시
+  const email = watch("email");
+  const password = watch("password");
+  const password_confirmation = watch("password_confirmation");
+  const first_name = watch("first_name");
+  const last_name = watch("last_name");
+  const phone = watch("phone");
+  const organization_id = watch("organization_id");
 
-    async function loadUserData() {
-      if (!isMounted) return;
-
-      try {
-        // 서버에서 사용자 확인
-        const userData = await getUser();
-        if (!userData && isMounted) {
-          router.push("/error?message=로그인 정보가 없거나 유효하지 않습니다");
-          return;
-        }
-
-        // 쿠키에서 인증 데이터 가져오기
-        const cookieAuthData = Cookies.get("auth_data");
-        if (!cookieAuthData || typeof cookieAuthData !== "string") {
-          if (isMounted) {
-            router.push(
-              "/error?message=로그인 정보가 없거나 유효하지 않습니다"
-            );
-          }
-          return;
-        }
-
-        try {
-          const decryptedString = decrypt(cookieAuthData);
-          if (!decryptedString) {
-            throw new Error("복호화된 데이터가 없습니다");
-          }
-
-          const decryptedAuthData: NeededUserMetadata =
-            JSON.parse(decryptedString);
-
-          if (isMounted) {
-            setAuthData(decryptedAuthData);
-
-            // 폼 값 설정
-            setValue("email", decryptedAuthData.email || "");
-            setValue("first_name", decryptedAuthData.first_name || "");
-            setValue("last_name", decryptedAuthData.last_name || "");
-            setValue("uid", decryptedAuthData.uid || "");
-            setValue("profile_image", decryptedAuthData.profile_image || "");
-
-            if (decryptedAuthData.isEmailSignup) {
-              setIsSignUpUseEmail(true);
-            }
-
-            setIsLoading(false);
-          }
-        } catch (error) {
-          if (isMounted) {
-            const errorMessage =
-              error instanceof Error
-                ? error.message
-                : "알 수 없는 에러가 발생했습니다";
-            router.push(`/error?message=${encodeURIComponent(errorMessage)}`);
-          }
-        }
-      } catch (error) {
-        if (isMounted) {
-          console.error("사용자 정보 확인 중 오류:", error);
-          router.push(
-            "/error?message=로그인 정보를 확인하는 중 오류가 발생했습니다"
-          );
-        }
-      }
-    }
-
-    loadUserData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [router, setValue]);
+  // 모든 필수 필드가 입력되었는지 확인
+  const allRequiredFieldsFilled =
+    !!email &&
+    !!password &&
+    !!password_confirmation &&
+    !!first_name &&
+    !!last_name &&
+    !!phone &&
+    !!organization_id &&
+    watch("password") === watch("password_confirmation");
 
   useEffect(() => {
-    // 체크박스 상태가 변경될 때 폼 값 업데이트
     setValue("marketing_opt_in", isChecked.includes("mailAgreement"));
     setValue("privacy_agreed", isChecked.includes("cookieAgreement"));
   }, [isChecked, setValue]);
@@ -179,69 +113,129 @@ export default function LoginPage() {
     }
   };
 
-  const organizationOptions: { label: string; value: number }[] =
+  const organizationOptions =
     organizations?.map((organization) => ({
       label: organization.name,
       value: organization.id,
     })) || [];
 
-  
-
-  const onSubmit = async (data: CreateUser) => {
+  const onSubmit = async (data: SignupPage) => {
     try {
-      const { error } = await createProfile(data);
+      // 1. 인증 계정 생성
+      const { userData, error } = await auth.signUpWithEmail(
+        data.email,
+        data.password
+      );
+
       if (error) {
-        router.push(`/error?message=회원가입 실패: ${error.message}`);
+        console.error("회원가입 오류:", error);
+        toaster.create({
+          title: `회원가입 실패: ${error.message}`,
+          type: "error",
+        });
         return;
       }
 
-      if (isSignUpUseEmail) {
+      // 2. 프로필 생성
+      if (userData.user) {
+        // 사용자 ID 가져오기
+        const uid = userData.user.id;
+
+        // 프로필 데이터에 uid 추가
+        const profileData: SignupPage = {
+          ...data,
+          uid: uid,
+          profile_image: "",
+        };
+
+        // 프로필 생성
+        const { error: profileError } = await user.createProfile(profileData);
+
+        if (profileError) {
+          console.error("프로필 생성 오류:", profileError);
+          toaster.create({
+            title: `프로필 생성 실패: ${profileError.message}`,
+            type: "error",
+          });
+          return;
+        }
+
         toaster.create({
-          title: "회원가입 성공. 이메일 로그인 후 이용해주세요.",
+          title: "회원가입이 완료되었습니다.",
           type: "success",
         });
-        window.location.href = "/login";
-        return;
-      }
 
-      try {
-        await refreshUser();
-        // 프로필 생성 성공 후 홈페이지로 리다이렉트
-        window.location.href = "/";
-      } catch (refreshError) {
-        console.error("사용자 정보 갱신 중 오류:", refreshError);
+        router.push("/login");
+      } else {
+        console.error("사용자 정보 없음");
         toaster.create({
-          title: "회원가입은 성공했으나 로그인 처리 중 오류가 발생했습니다.",
-          type: "warning",
+          title: "사용자 정보를 찾을 수 없습니다.",
+          type: "error",
         });
-        window.location.href = "/login";
       }
     } catch (error) {
       console.error("회원가입 오류:", error);
-      router.push("/error?message=회원가입 중 오류가 발생했습니다");
+      toaster.create({
+        title: "회원가입 중 오류가 발생했습니다",
+        type: "error",
+      });
     }
   };
 
-  if (isLoading) {
-    return (
-      <Container>
-        <Spinner size="xl" />
-        <Text variant="body" weight="medium" style={{ marginTop: "16px" }}>
-          사용자 정보를 확인하는 중입니다...
-        </Text>
-      </Container>
-    );
-  }
-
   return (
-    <Container onSubmit={handleSubmit(onSubmit)}>
-      <FormContainer>
-        <Heading level={4}>환영합니다! {authData?.first_name}님</Heading>
+    <Container>
+      <FormContainer onSubmit={handleSubmit(onSubmit)}>
+        <Heading level={4}>환영합니다!</Heading>
+
         <InputContainer>
+          <InputAndTitle title="이메일" errorMessage={errors.email?.message}>
+            <Input
+              type="email"
+              placeholder="example@gmail.com"
+              {...register("email")}
+              autoComplete="email"
+            />
+          </InputAndTitle>
+
+          <InputAndTitle
+            title="비밀번호"
+            errorMessage={errors.password?.message}
+          >
+            <Input
+              type="password"
+              placeholder="비밀번호를 입력해주세요"
+              {...register("password")}
+              autoComplete="new-password"
+            />
+          </InputAndTitle>
+
+          <InputAndTitle
+            title="비밀번호 확인"
+            errorMessage={
+              errors.password_confirmation?.message ||
+              watch("password") !== watch("password_confirmation")
+                ? "비밀번호가 일치하지 않습니다."
+                : ""
+            }
+          >
+            <Input
+              type="password"
+              placeholder="비밀번호를 입력해주세요"
+              {...register("password_confirmation")}
+              autoComplete="new-password"
+            />
+          </InputAndTitle>
+
           <HorizontalContainer>
             <InputAndTitle title="성" errorMessage={errors.last_name?.message}>
-              <Input type="text" placeholder="홍" {...register("last_name")} />
+              <Input
+                type="text"
+                placeholder="홍"
+                {...register("last_name")}
+                autoComplete="family-name"
+              />
             </InputAndTitle>
+
             <InputAndTitle
               title="이름"
               errorMessage={errors.first_name?.message}
@@ -250,24 +244,20 @@ export default function LoginPage() {
                 type="text"
                 placeholder="길동"
                 {...register("first_name")}
+                autoComplete="given-name"
               />
             </InputAndTitle>
           </HorizontalContainer>
-          <InputAndTitle title="이메일" errorMessage={errors.email?.message}>
-            <Input
-              type="email"
-              placeholder="example@gmail.com"
-              {...register("email")}
-              disabled
-            />
-          </InputAndTitle>
+
           <InputAndTitle title="전화번호" errorMessage={errors.phone?.message}>
             <Input
               type="tel"
               placeholder="010-1234-5678"
               {...register("phone")}
+              autoComplete="tel"
             />
           </InputAndTitle>
+
           <InputAndTitle
             title="나의 소속"
             errorMessage={errors.organization_id?.message}
@@ -279,7 +269,6 @@ export default function LoginPage() {
               isDisabled={isOrganizationLoading}
               isLoading={isOrganizationLoading}
               isClearable={true}
-              isRtl={false}
               isSearchable={true}
               options={organizationOptions}
               name="organization_id"
@@ -291,21 +280,15 @@ export default function LoginPage() {
               }}
               onChange={(e) => {
                 setValue("organization_id", e?.value || 0);
-                console.log(e?.value);
               }}
             />
           </InputAndTitle>
         </InputContainer>
+
         <Stack className="agreement-container">
           <div className="agreement-container-line">
             <Text variant="caption" weight="bold">
-              <a
-                href={constants.PRIVACY_POLICY_URL || ""}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                개인정보 보호정책 및 메일 수신에 동의합니다
-              </a>
+              개인정보 보호정책 및 메일 수신에 동의합니다
             </Text>
             <Checkbox
               checked={
@@ -315,7 +298,9 @@ export default function LoginPage() {
               onChange={handleCheckboxChangeAll}
             />
           </div>
+
           <Separator orientation="horizontal" style={{ width: "100%" }} />
+
           <div className="agreement-container-line">
             <Text variant="small" weight="medium">
               메일 수신 동의하기(선택)
@@ -325,6 +310,7 @@ export default function LoginPage() {
               onChange={() => handleCheckboxChange("mailAgreement")}
             />
           </div>
+
           <div className="agreement-container-line">
             <Text variant="small" weight="medium">
               <a
@@ -341,17 +327,25 @@ export default function LoginPage() {
             />
           </div>
         </Stack>
+
         <Button
           variant="flat"
           type="submit"
-          disabled={isSubmitting || !isChecked.includes("cookieAgreement")}
+          disabled={
+            isSubmitting ||
+            !isChecked.includes("cookieAgreement") ||
+            !allRequiredFieldsFilled ||
+            Object.keys(errors).length > 0
+          }
         >
           {isSubmitting ? (
             <>
-              <Spinner /> 회원가입
+              <Spinner /> 회원가입 중...
             </>
-          ) : confirmedRoleType ? (
-            formatedKrRole(confirmedRoleType) + " 회원가입"
+          ) : confirmedRoleType === "admin" ? (
+            "관리자 회원가입"
+          ) : confirmedRoleType === "teacher" ? (
+            "교사 회원가입"
           ) : (
             "회원가입"
           )}
@@ -369,17 +363,28 @@ export default function LoginPage() {
         >
           다른 권한으로 회원가입하기
         </Text>
-        <DevTool control={control} />
+        {process.env.NODE_ENV === "development" && (
+          <DevTool control={control} />
+        )}
       </FormContainer>
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <ModalContainer>
           <Heading level={4}>다른 권한으로 회원가입하기</Heading>
           <InputAndTitle title="권한 종류">
-            <Select
-              options={roleAccessTypeOptions}
+            <RadioGroup.Root
               value={roleAccessType}
-              onChange={(e) => e && setRoleAccessType(e)}
-            />
+              onValueChange={(e) => setRoleAccessType(e.value)}
+            >
+              <HStack gap="6">
+                {roleAccessTypeOptions.map((item) => (
+                  <RadioGroup.Item key={item.value} value={item.value}>
+                    <RadioGroup.ItemHiddenInput />
+                    <RadioGroup.ItemIndicator />
+                    <RadioGroup.ItemText>{item.label}</RadioGroup.ItemText>
+                  </RadioGroup.Item>
+                ))}
+              </HStack>
+            </RadioGroup.Root>
           </InputAndTitle>
           <InputAndTitle title="권한 코드">
             <Input
@@ -396,9 +401,8 @@ export default function LoginPage() {
             onClick={async () => {
               const { data, error } = await confirmRoleAccessCode(
                 roleAccessCode,
-                roleAccessType.value as Role
+                roleAccessType as Role
               );
-              console.log("data", data, "error", error);
               if (error || !data) {
                 toaster.create({
                   title: "권한 인증 실패",
@@ -411,7 +415,6 @@ export default function LoginPage() {
                   title: "권한 인증 성공",
                   type: "success",
                 });
-                setValue("role", data.role as Role);
                 setIsModalOpen(false);
                 setRoleAccessCode("");
               }
@@ -425,19 +428,13 @@ export default function LoginPage() {
   );
 }
 
-const ModalContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-`;
-
 const Container = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding-bottom: 80px;
+  height: calc(100vh - 90px);
 `;
 
 const FormContainer = styled.form`
@@ -445,22 +442,25 @@ const FormContainer = styled.form`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 16px;
   width: 100%;
   max-width: 500px;
-  margin: 0 auto;
-  padding: 40px 16px;
+  padding: 12px;
+  background-color: var(--white);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 
   .agreement-container {
     margin: 16px 0;
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 8px;
     flex-direction: column;
-    background-color: var(--white);
-    padding: 10px;
+    background-color: var(--grey-50);
+    padding: 16px;
     border-radius: 6px;
     width: 100%;
+
     .agreement-container-line {
       width: 100%;
       justify-content: space-between;
@@ -484,24 +484,25 @@ const InputContainer = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 16px;
   width: 100%;
+
   input {
     background-color: var(--white);
-  }
-  .password-container {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: 100%;
   }
 `;
 
 const HorizontalContainer = styled.div`
   width: 100%;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   flex-direction: row;
-  align-items: top;
-  justify-content: top;
+  align-items: flex-start;
+`;
+const ModalContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 `;
