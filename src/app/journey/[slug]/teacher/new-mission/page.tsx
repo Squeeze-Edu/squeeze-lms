@@ -34,6 +34,7 @@ export default function NewMissionPage({ editMissionData }: { editMissionData?: 
   
   const {
     register,
+    setValue,
     handleSubmit,
     formState: { errors },
   } = useForm<CreateMission>({
@@ -90,7 +91,7 @@ export default function NewMissionPage({ editMissionData }: { editMissionData?: 
     items: [
       { label: "텍스트", value: "text" },
       { label: "이미지", value: "image" },
-      { label: "비디오", value: "video" },
+      { label: "팀 미션", value: "team" },
     ],
   });
 
@@ -154,6 +155,7 @@ export default function NewMissionPage({ editMissionData }: { editMissionData?: 
           onChange={(value) => {
             setContent(value);
             setDescriptionError(null);
+            setValue("description", value);
           }}
         />
         </InputAndTitle>
